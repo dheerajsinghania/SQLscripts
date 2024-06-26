@@ -1,0 +1,32 @@
+Declare @tblConnectedUsers Table (
+                SPID                       int                                           )
+
+Declare @vcSQLText                      varchar(200),
+                @iSPID                                 int
+
+--Get the currently connected users
+Insert into  @tblConnectedUsers
+Select p.spid
+from master.dbo.sysprocesses p (nolock)
+join master..sysdatabases d (nolock) on p.dbid = d.dbid
+Where d.[name] = 'EBN_QA' --> database name here
+
+--Loop though the connected users and kill their connections
+While 1 = 1
+Begin
+
+                Select top 1 @iSPID = SPID
+                From  @tblConnectedUsers
+                Where SPID > IsNull(@iSPID, 0) 
+                order by SPID asc
+
+-- break when there are no more SPIDs
+                If @@RowCount = 0
+                                Break
+
+--Build the SQL string
+                Set @vcSQLText = 'Kill ' + Convert(varchar(10), @iSPID)
+
+                Exec( @vcSQLText )                                                        
+
+End

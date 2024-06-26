@@ -1,0 +1,33 @@
+use msdb;
+
+
+select destination_database_name As DBName ,DBRestored = destination_database_name,RestoreDate = restore_date,SourceDB = b.database_name,SourceFile = physical_name,
+b.name as SoftwareName,b.user_name As UserRestoreDB,b.database_creation_date as SourceDBCreateDate
+,b.backup_finish_date as BackupDate
+from RestoreHistory h
+inner join BackupSet b
+      on h.backup_set_id = b.backup_set_id
+inner join BackupFile f
+      on f.backup_set_id = b.backup_set_id
+order by RestoreDate desc
+
+go
+
+
+use msdb
+go
+select  Distinct  @@servername as ServerName ,destination_database_name As DBName ,DBRestored = destination_database_name,RestoreDate = restore_date,
+b.server_name as SourceServer
+,SourceDB = b.database_name,
+b.name as SoftwareName,b.user_name As UserRestoreDB,b.database_creation_date as SourceDBCreateDate
+,b.backup_finish_date as BackupDate
+from RestoreHistory h
+inner join BackupSet b
+      on h.backup_set_id = b.backup_set_id
+inner join BackupFile f
+      on f.backup_set_id = b.backup_set_id
+where destination_database_name in ('TEST_Content_InvestorPortal3','TEST_Content_InvestorPortal2','TEST_Content_InvestorPortal','WSS_Content_CCSHP')
+order by RestoreDate desc
+
+go
+

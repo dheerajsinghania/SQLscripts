@@ -1,0 +1,29 @@
+HI All,
+
+My name is Dheeraj Singhania , i have total 9 years IT experience . I started my carrer as an apllication support analyst .
+where i was the part of application team and proving 24*7 support related to apllicationa and on weekend we do the deployements /aptching for 
+the appliation . at that time i found my intrest towards database so i switched and join infogain as SQL DBA in 2015.
+Where i worked on insurance and healthcare domains with US bases client .Where we were providing off bussiness hour support to the client .
+and got the chance to work on Migrations , patching and daya to day SQL DBA activties .
+After 4 years i joined Navisite in 2019 and here we are working shared model in which we are supporting 180 + clients mixed of US and europe clints 
+We are giving the support to our client anything to everyting however we have L1,L2 and L3 teams and i am the part of L3 team .
+but for few HOT client all the request come directly to us which can be anything like blocking , backup missing , refresh for which we don't have anyl1/l2 support.
+so basically the request comes directly from client for anything like logshipping issue , backup issue , maintance plans , migrations, patching , performance issue ,
+server assessments and provide the recommendation to the clients to improve the perfomance of their servers etc.
+few of our client have DR drilling on monthly basis and i was the part of few DR drills and comepltd successfully . in which basically we need to cordinate with client's
+Storage team and apllication team . like we need to brings up the SQL resources after getting gree signal from storage and after verifiying and doing helath check we
+give go ahead to applicatio team so they can test on their end .
+i was also the part of capacity planiing for few of our clinet in which we obseverd the DB growth and backup size and all and provide the feedback to client so they
+can add up the space to their drives accordingly.
+i woulk like to share the 2 issues which were new to me if you are ok with that :-
+
+1- AG more than 110 DBs are the part of
+
+2- parallel redo tran wait type
+
+HIPPA - Health Insurance portability and acccountablilty act - health organisation must need to provode security , privacy of client health info and give breach notification rule
+SOX requires formal data security policies, communication of data security policies, and consistent enforcement of data security policies. Companies should develop and implement
+ a comprehensive data security strategy that protects and secures all financial data stored and utilized during normal operations
+RTO refers to the amount of time you need to bring a system back online. RPO is a business calculation for acceptable data loss from downtime.
+
+

@@ -1,0 +1,179 @@
+USE master;
+GO
+if not exists (select name from sys.databases where name = 'SQLAdmin')
+    create database SQLAdmin
+go
+declare @dbname sysname
+declare @dbid varchar(5)
+declare @sql as varchar(4000)
+
+CREATE TABLE #sys_table_sizes (
+    database_id int,
+    database_name SYSNAME, 
+    schema_id int,
+    schema_name sysname, 
+    object_id int,
+    object_name sysname, 
+    row_count CHAR(11), 
+    reserved_in_kb decimal(15,2),
+    data_size_in_kb decimal(15,2),
+    index_size_in_kb decimal(15,2),
+    unused_size_in_kb decimal(15,2)
+)
+
+CREATE TABLE #sys_table_sizes_xml_and_fulltext (
+    database_id int,
+    schema_id int,
+    object_id int,
+    reserved_in_kb decimal(15,2),
+    unused_size_in_kb decimal(15,2)
+)
+
+declare dbname_cursor CURSOR FOR
+SELECT name, database_id from sys.databases 
+where database_id not in (1,2,3,4) and state=0
+
+OPEN dbname_cursor
+
+FETCH NEXT FROM dbname_cursor
+INTO @dbname, @dbid
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+
+--in_row_data_page_count 
+--If the partition is part of a heap, the value is the number of data pages in the heap. 
+--If the partition is part of an index, the value is the number of pages in the leaf level. 
+--Nonleaf pages in the B-tree are not included in the count.
+--IAM (Index Allocation Map) pages are not included in either case.
+
+--in_row_used_page_count 
+--Total number of pages in use to store and manage the in-row data in this partition. 
+--This count includes nonleaf B-tree pages, IAM pages, and all pages included in the in_row_data_page_count column.
+
+--used_page_count
+--Total number of pages used for the partition. 
+--Computed as in_row_used_page_count + lob_used_page_count + row_overflow_used_page_count.
+
+set @sql = '
+insert into #sys_table_sizes
+select ''' +
+@dbid + ''' database_id, 
+''' +
+@dbname + ''' database_name, 
+o.schema_id schema_id,
+object_schema_name (ps.object_id, ' + @dbid + ') schema_name,
+ps.object_id object_id,
+object_name(ps.object_id, '+ @dbid + ') object_name, 
+row_count = sum (case when (index_id<2) then row_count else ''0'' end),
+(SUM(reserved_page_count)*8) as reserved_in_kb, 
+data_size_in_kb = sum (case when (index_id<2) 
+                            then (in_row_data_page_count + lob_used_page_count + row_overflow_used_page_count) 
+                            else ''0'' end)*8,
+index_size_in_kb = (sum(used_page_count) - sum (case when (index_id<2) 
+                            then (in_row_data_page_count + lob_used_page_count + row_overflow_used_page_count) 
+                            else ''0'' end))*8,
+unused_size_in_kb = (SUM(reserved_page_count)-SUM(used_page_count))    *8                
+from [' + @dbname + '].sys.dm_db_partition_stats ps
+join [' + @dbname + '].sys.objects o on ps.object_id=o.object_id
+where o.type = ''U'' and is_ms_shipped = 0
+group by o.schema_id, ps.object_id
+'
+
+--print @sql
+exec (@sql)
+
+set @sql = '
+insert into #sys_table_sizes_xml_and_fulltext
+select ''' +
+@dbid + ''' database_id, 
+(select schema_id from [' + @dbname + '].sys.objects where object_id = it.parent_object_id) schema_id,
+it.parent_object_id object_id,
+(SUM(reserved_page_count)*8) as reserved_in_kb, 
+unused_size_in_kb = (SUM(reserved_page_count)-SUM(used_page_count))    *8                
+from [' + @dbname + '].sys.dm_db_partition_stats ps
+join [' + @dbname + '].sys.objects o on ps.object_id=o.object_id
+join [' + @dbname + '].sys.internal_tables it  on ps.object_id = it.object_id
+where it.internal_type IN (202,204,211,212,213,214,215,216) 
+group by o.schema_id, it.parent_object_id
+'
+
+--print @sql
+exec (@sql)
+
+   FETCH NEXT FROM dbname_cursor
+   INTO @dbname, @dbid
+END
+
+update A
+set A.reserved_in_kb = convert(int, A.reserved_in_kb) + convert(int, B.reserved_in_kb),
+A.index_size_in_kb = convert(int, A.index_size_in_kb) + (convert(int, B.reserved_in_kb) - convert(int, B.unused_size_in_kb)),
+A.unused_size_in_kb = convert(int, A.unused_size_in_kb) + convert(int, B.unused_size_in_kb)
+from #sys_table_sizes A
+join #sys_table_sizes_xml_and_fulltext B on A.database_id=B.database_id and A.schema_id = B.schema_id and A.object_id=B.object_id
+
+CLOSE dbname_cursor
+DEALLOCATE dbname_cursor
+
+--select * from #sys_table_sizes 
+--select * from #sys_table_sizes_xml_and_fulltext
+
+/*
+--more columns
+select *, 
+[index_size > data_size] = case when convert(int, index_size_in_kb)>convert(int, data_size_in_kb) then 'Yes' else 'No' end
+from #sys_table_sizes 
+order by database_name asc, reserved_in_kb desc
+*/
+
+/*
+--all rows
+select database_name, schema_name, object_name, row_count, reserved_in_kb, data_size_in_kb, index_size_in_kb, unused_size_in_kb, 
+[index_size > data_size] = case when convert(int, index_size_in_kb)>convert(int, data_size_in_kb) then 'Yes' else 'No' end
+from #sys_table_sizes 
+order by database_name asc, reserved_in_kb desc
+*/
+go
+
+--TOP N rows
+--define a CTE with the name cte_table to get top 10 biggest tables in every database
+;WITH cte_table AS (
+     SELECT
+        ROW_NUMBER() OVER ( PARTITION BY database_name ORDER BY reserved_in_kb DESC ) AS 'RowNumber',
+        database_name, schema_name, object_name, row_count, reserved_in_kb, 
+        data_size_in_kb, index_size_in_kb, unused_size_in_kb, 
+        [index_size > data_size] = case when convert(int, index_size_in_kb)>convert(int, data_size_in_kb) 
+                                        then 'Yes' else 'No' end
+      FROM #sys_table_sizes
+)
+-- and select the data from the CTE table
+SELECT
+        database_name, schema_name, object_name, row_count, reserved_in_kb, 
+        data_size_in_kb, index_size_in_kb, unused_size_in_kb, 
+        [index_size > data_size] = case when convert(int, index_size_in_kb)>convert(int, data_size_in_kb) 
+                                        then 'Yes' else 'No' end
+FROM cte_table
+WHERE RowNumber <= 10
+
+
+/*
+--Uncomment the lines for Testing
+--Compare the result with sp_spaceused command
+sp_spaceused 'Sales.Store'
+go
+select 'Sales.Store' as test_object,object_name, row_count, reserved_in_kb, data_size_in_kb, index_size_in_kb, unused_size_in_kb from #sys_table_sizes 
+where database_name = 'AdventureWorks2008' and object_name like 'Store'
+go
+sp_spaceused 'Person.Person'
+go
+select 'Person.Person' as test_object, object_name, row_count, reserved_in_kb, data_size_in_kb, index_size_in_kb, unused_size_in_kb from #sys_table_sizes 
+where database_name = 'AdventureWorks2008' and object_name like 'Person'
+go
+sp_spaceused 'Production.ProductModel' --xml data
+go
+select 'Production.ProductModel' as test_object, object_name, row_count, reserved_in_kb, data_size_in_kb, index_size_in_kb, unused_size_in_kb from #sys_table_sizes 
+where database_name = 'AdventureWorks2008' and object_name like 'ProductModel'
+go
+*/
+drop table #sys_table_sizes
+drop table #sys_table_sizes_xml_and_fulltext

@@ -1,0 +1,3 @@
+Select * from sys.traces
+
+Select strattime , * from sys_fn_trace_gettable(path from 1st query , default) where startTime between '2010-01-21 13:34:45:110' and '2010-01-22 13:34:45:110'

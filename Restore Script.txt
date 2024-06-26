@@ -1,0 +1,5 @@
+select top 100 bs.name,bs.backup_start_date,'Restore database ['+bs.database_name+'] from disk ='''++replace(bf.physical_device_name,'C:\Users\Navimaint.PEOPLESYSTEMS\Desktop\Navi_MSSQL_Instance_Snapshot_Tool_V1.0\backup\PSSQL01\Database_Backup\','Z:\Snapshot\Database_backup\')+''' with move N'''+(select name from sys.sysaltfiles where dbid=db_ID(bs.database_name) and fileid=1)+''' TO ''S:\Microsoft SQL Server\MSSQL13.MSSQLSERVER\MSSQL\Data\'+
+(select replace([filename],'D:\Microsoft SQL Server\MSSQL10_50.MSSQLSERVER\MSSQL\DATA\','') from sys.sysaltfiles where dbid=db_ID(bs.database_name) and fileid=1)+'.mdf'', move '''+(select name from sys.sysaltfiles where dbid=db_ID(bs.database_name) and fileid=2)+''' TO N''L:\Microsoft SQL Server\MSSQL13.MSSQLSERVER\MSSQL\Data\'+(select replace([filename],'D:\Microsoft SQL Server\MSSQL10_50.MSSQLSERVER\MSSQL\DATA\','') from sys.sysaltfiles where dbid=db_ID(bs.database_name) and fileid=2)+''', stats=5'
+from msdb..backupset bs join msdb..backupmediafamily bf on bs.media_set_id=bf.media_set_id
+where bs.type='D'
+order by bs.backup_start_date desc

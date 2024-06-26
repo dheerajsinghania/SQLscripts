@@ -1,0 +1,27 @@
+/* SQL Server Ring Buffer Memory Warnings */
+WITH RingBuffer
+AS (SELECT CAST (dorb.record AS XML) AS xRecord,
+dorb.timestamp
+FROM sys.dm_os_ring_buffers AS dorb
+WHERE dorb.ring_buffer_type = 'RING_BUFFER_RESOURCE_MONITOR')
+SELECT @@SERVERNAME AS [Server Name],
+xr.value('(ResourceMonitor/Notification)[1]', 'VARCHAR(75)') AS RmNotification,
+xr.value('(ResourceMonitor/IndicatorsProcess)[1]', 'tinyint') AS IndicatorsProcess,
+xr.value('(ResourceMonitor/IndicatorsSystem)[1]', 'tinyint') AS IndicatorsSystem,
+DATEADD (ss, (-1 * ((dosi.cpu_ticks / CONVERT (float, ( dosi.cpu_ticks / dosi.ms_ticks ))) - [timestamp])/1000), CURRENT_TIMESTAMP) AS RmDateTime,
+xr.value('(MemoryNode/TargetMemory)[1]', 'BIGINT') AS TargetMemory,
+xr.value('(MemoryNode/ReserveMemory)[1]', 'BIGINT') AS ReserveMemory,
+xr.value('(MemoryNode/CommittedMemory)[1]', 'BIGINT') AS CommitedMemory,
+xr.value('(MemoryNode/SharedMemory)[1]', 'BIGINT') AS SharedMemory,
+xr.value('(MemoryNode/PagesMemory)[1]', 'BIGINT') AS PagesMemory,
+xr.value('(MemoryRecord/MemoryUtilization)[1]', 'BIGINT') AS MemoryUtilization,
+xr.value('(MemoryRecord/TotalPhysicalMemory)[1]', 'BIGINT') AS TotalPhysicalMemory,
+xr.value('(MemoryRecord/AvailablePhysicalMemory)[1]', 'BIGINT') AS AvailablePhysicalMemory,
+xr.value('(MemoryRecord/TotalPageFile)[1]', 'BIGINT') AS TotalPageFile,
+xr.value('(MemoryRecord/AvailablePageFile)[1]', 'BIGINT') AS AvailablePageFile,
+xr.value('(MemoryRecord/TotalVirtualAddressSpace)[1]', 'BIGINT') AS TotalVirtualAddressSpace,
+xr.value('(MemoryRecord/AvailableVirtualAddressSpace)[1]', 'BIGINT') AS AvailableVirtualAddressSpace,
+xr.value('(MemoryRecord/AvailableExtendedVirtualAddressSpace)[1]', 'BIGINT') AS AvailableExtendedVirtualAddressSpace,
+CURRENT_TIMESTAMP AS [Collection Time]
+FROM RingBuffer AS rb CROSS APPLY rb.xRecord.nodes ('Record') AS record(xr) CROSS JOIN sys.dm_os_sys_info AS dosi
+ORDER BY RmDateTime DESC;

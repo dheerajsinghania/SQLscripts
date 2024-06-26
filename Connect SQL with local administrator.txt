@@ -1,0 +1,30 @@
+// How to connect to SQL Server if you are completely locked out
+https://www.mssqltips.com/sqlservertip/2465/how-to-connect-to-sql-server-if-you-are-completely-locked-out/ 
+
+
+step 1 : stop the SQL services
+C:\Windows\system32>net stop mssqlserver
+The SQL Server (MSSQLSERVER) service is stopping.
+The SQL Server (MSSQLSERVER) service was stopped successfully.
+
+Step 2: Go to the binn directory and start the SQL server in single user mode as shown below
+D:\Program Files\Microsoft SQL Server\MSSQL10_50.MSSQLSERVER\MSSQL\Binn>sqlservr -m
+
+Step 3: Once the SQL instance is started, run below command to connect to SQL from another cmd prompt window. If sql is a named instance provide full name using -S 
+sqlcmd -E -S servername\instancename
+
+Step 4: Create a new login or group as per your need.
+1> create login dbalogin with password='P@s$w0rD'
+2> go
+
+step 5: assign the login necessary rights
+1> exec sp_addsrvrolemember [dbalogin],[sysadmin]
+2> go
+
+step 6: stop the sql services and restart in normal mode and connect normally using created login.
+
+
+
+
+
+

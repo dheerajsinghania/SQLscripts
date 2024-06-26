@@ -1,0 +1,2 @@
+select * from sys. dm_tran_locks where resource_database_id = DB_ID() and 
+resource_associated_entity_id = OBJECT_ID('staging.dqf_alternateid_scd_int')

@@ -1,0 +1,38 @@
+use distribution
+go
+--Gets the unique id for query 2
+select * from MSrepl_errors order by time desc
+
+--Gets the primary key for the table to be updated
+sp_browsereplcmds '0x002E2E2B00001934001900000000', '0x002E2E2B00001934001900000000'
+
+
+--put a record into the temp table
+select top 1 * into #temp from t_stored_item
+
+--using the data from above, insert a record onto subscriber B node
+SET IDENTITY_INSERT t_stored_item ON
+INSERT INTO [AADRPTS].[dbo].[t_stored_item]
+           ([sequence]
+           ,[item_number]
+           ,[actual_qty]
+           ,[unavailable_qty]
+           ,[status]
+           ,[wh_id]
+           ,[location_id]
+           ,[fifo_date]
+           ,[expiration_date]
+           ,[reserved_for]
+           ,[lot_number]
+           ,[inspection_code]
+           ,[serial_number]
+           ,[type]
+           ,[put_away_location]
+                                                , unique_id)
+select sequence, item_number, actual_qty, unavailable_qty, status, wh_id, location_id, fifo_date, 
+expiration_date, reserved_for, lot_number, inspection_code, serial_number, type, put_away_location, 
+1000948185 --update primary key here
+from #temp
+SET IDENTITY_INSERT t_stored_item OFF
+
+drop table #temp

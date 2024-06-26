@@ -1,0 +1,179 @@
+create database corruptionTest
+
+go
+
+create table corrupt (ID int primary key, [name] varchar(50), [address] varchar(100))
+
+go
+
+declare @a int
+set @a=5
+while @a<6
+begin
+insert into corrupt (name,address) values ('n'+convert(varchar,@a),'a'+convert(varchar,@a))
+set @a=@a+1
+end
+
+go
+
+dbcc ind([corruptionTest],corrupt,-1)
+
+go
+
+declare @a int
+set @a=5
+while @a<1000
+begin
+insert into corrupt (name,address) values ('n'+convert(varchar,@a),'a'+convert(varchar,@a))
+set @a=@a+1
+end
+
+CREATE NONCLUSTERED INDEX [NonClusteredIndexName] ON [dbo].[corrupt]
+(
+	[name] ASC
+)
+go
+
+CREATE NONCLUSTERED INDEX [NonClusteredIndexaddr] ON [dbo].[corrupt]
+(
+	[address] ASC
+)
+
+
+
+dbcc ind([corruptionTest],corrupt,-1)
+
+go
+
+dbcc traceon (3604)
+
+go
+
+dbcc page ([corruptionTest],1,349,1)
+
+go
+
+select (349*8192)+1379
+
+go
+
+
+select * from msdb.dbo.suspect_pages
+
+go
+
+USE [master]
+
+ALTER DATABASE [corruptionTest] SET OFFLINE WITH ROLLBACK IMMEDIATE
+
+go
+go
+--do some corruption in physical file
+
+
+go
+
+USE [master]
+
+ALTER DATABASE [corruptionTest] SET online
+
+go
+
+select * from msdb.dbo.suspect_pages
+
+go
+use CorruptionTest
+
+go
+
+select * from [dbo].[corrupt] 
+
+go
+
+select name from [dbo].[corrupt] 
+
+go
+
+select * from msdb.dbo.suspect_pages
+
+go
+
+select address from [dbo].[corrupt]
+
+go
+
+select name from [dbo].[corrupt] with (index(0))
+
+
+go
+
+dbcc checkdb
+
+go
+
+select * from sys.objects where object_id=1317579732
+
+go
+
+select * from sys.indexes where object_id=1317579732
+
+go
+
+
+
+--script corrupted index, drop it and recreate it
+
+
+BACKUP DATABASE [corruptionTest] TO  
+DISK = N'E:\Program Files\Microsoft SQL Server\MSSQL14.MSSQLSERVER\MSSQL\Backup\corruptionTest.bak' WITH 
+NOFORMAT, INIT,  NAME = N'corruptionTest-Full Database Backup', SKIP, NOREWIND, NOUNLOAD, COMPRESSION,  STATS = 10
+GO
+
+
+
+--restore from page
+
+--repair from allow data loss
+
+Alter database corruptionTest set SINGLE_USER
+
+dbcc checkdb (corruptionTest, REPAIR_ALLOW_DATA_LOSS)
+
+Alter database corruptionTest set MULTI_USER
+
+select * from corrupt
+
+-----------------------
+
+--corruption in boot page
+--------------------
+
+drop database corruptionTest
+
+go 
+
+create database corruptionTest
+
+go
+
+create table corrupt (ID int primary key, [name] varchar(50), [address] varchar(100))
+
+go
+
+declare @a int
+set @a=1
+while @a<1000
+begin
+insert into corrupt (name,address) values ('n'+convert(varchar,@a),'a'+convert(varchar,@a))
+set @a=@a+1
+end
+
+go
+
+USE [master]
+
+ALTER DATABASE [corruptionTest] SET OFFLINE WITH ROLLBACK IMMEDIATE
+
+go
+
+select (9*8192)

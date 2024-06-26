@@ -1,0 +1,25 @@
+SELECT	CASE WHEN SES.session_id = @@SPID THEN 'It''s me! '
+        ELSE '' END + COALESCE(SES.login_name,'???') AS WhosGotTheDAC, 
+		SES.session_id, 
+		SES.login_time, 
+		SES.status, 
+		SES.original_login_name 
+FROM	sys.endpoints EN 
+INNER JOIN sys.dm_exec_sessions SES
+	ON EN.endpoint_id = SES.endpoint_id 
+WHERE	EN.name = 'Dedicated Admin Connection'
+
+--------------------------
+select 
+CASE
+WHEN es.session_id= @@SPID THEN 'you are :)'
+ELSE es.host_name
+END AS Who_is_running_DAC,
+es.original_login_name,
+es.session_id,
+es.login_time,
+es.status
+from sys.endpoints as ep
+join sys.dm_exec_sessions es on
+ep.endpoint_id=es.endpoint_id
+where ep.name='Dedicated Admin Connection'

@@ -1,0 +1,45 @@
+USE [master]
+GO
+/****** Object:  StoredProcedure [dbo].[sp_Navi_FixOrpahanUsers]    Script Date: 7/25/2019 7:38:47 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+alter proc [dbo].[sp_Navi_FixOrpahanUsers]
+as
+begin
+set nocount on
+if object_id('tempdb..#OrphanedUsers') is not null
+begin
+drop table #OrphanedUsers;
+end
+create table #OrphanedUsers
+(
+row_num  int identity(1,1),
+username varchar(1000),
+id       varchar(1000)
+)
+
+insert into #OrphanedUsers(username,id)
+exec sp_change_users_login 'Report'
+
+if exists(select top 1 * from #OrphanedUsers)
+begin
+declare @rowCount int
+set  @rowCount = (select count(1) from #OrphanedUsers )
+declare @i int=1
+declare @temp_User_name varchar(1000)
+while(@i <= @rowCount)
+begin
+	select @temp_User_name = username from #OrphanedUsers where row_num = @i;
+	exec  sp_change_users_login 'update_one',@temp_User_name,@temp_User_name
+	set @i = @i+1;
+	Print 'Fixed Login ' +@temp_User_name;
+	end
+Print char(13)+ 'All orphaned users for which login exist have been fixed on database : ' +db_name()
+end
+else
+Print 'No Orphan user exist in database : ' +db_name()
+end
+
+

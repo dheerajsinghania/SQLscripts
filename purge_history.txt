@@ -1,0 +1,17 @@
+DECLARE @jobId uniqueidentifier
+
+-- Obtain the current job identifier that is associated with the PurgeHistory
+SELECT @jobId = CAST(current_value AS uniqueidentifier)
+FROM msdb.dbo.syspolicy_configuration_internal
+WHERE name = N'PurgeHistoryJobGuid'
+
+-- Delete the job identifier association in the syspolicy configuration
+
+DELETE FROM msdb.dbo.syspolicy_configuration_internal
+WHERE name = N'PurgeHistoryJobGuid'
+
+-- Delete the offending job
+EXEC msdb.dbo.sp_delete_job @job_id = @jobId
+
+-- Re-create the job and its association in the syspolicy configuration table
+EXEC msdb.dbo.sp_syspolicy_create_purge_job

@@ -1,0 +1,28 @@
+
+--DB Free And File Space
+DECLARE @table TABLE
+(
+servername varchar(max),
+db_name varchar(max),
+logical_file_name varchar(max),
+group_id int,
+file_name varchar(max),
+allocated_space_in_mb float,
+space_used_in_mb float,
+max_in_mb float,
+available_space_in_mb float,
+percent_used float
+)
+
+INSERT INTO @table
+EXEC sp_msforeachdb 'use [?];SELECT @@SERVERNAME, ''?'', RTRIM(name) AS [Segment Name], groupid AS [Group Id], filename AS [File Name],
+   CAST(size/128.0 AS DECIMAL(10,2)) AS [Allocated Size in MB],
+   CAST(FILEPROPERTY(name, ''SpaceUsed'')/128.0 AS DECIMAL(10,2)) AS [Space Used in MB],
+   CAST([maxsize]/128.0 AS DECIMAL(10,2)) AS [Max in MB],
+   CAST(size/128.0-(FILEPROPERTY(name, ''SpaceUsed'')/128.0) AS DECIMAL(10,2)) AS [Available Space in MB],
+   CAST((CAST(FILEPROPERTY(name, ''SpaceUsed'')/128.0 AS DECIMAL(10,2))/CAST(size/128.0 AS DECIMAL(10,2)))*100 AS DECIMAL(10,2)) AS [Percent Used]
+FROM sysfiles
+ORDER BY groupid DESC'
+
+SELECT * FROM @table
+ORDER BY available_space_in_mb DESC 

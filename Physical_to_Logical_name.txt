@@ -1,0 +1,8 @@
+SELECT d.name AS Database_Name,
+m.name AS Logical_File_Name,
+m.physical_name AS File_Location
+FROM sys.master_files m
+INNER JOIN sys.databases d
+ON (m.database_id = d.database_id)
+where m.physical_name like '%Probitas_Q2%'
+ORDER BY 1, 2

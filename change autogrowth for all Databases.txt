@@ -1,0 +1,71 @@
+USE Master;
+GO
+
+SET NOCOUNT ON
+
+DECLARE @database AS NVARCHAR(256)
+	,@dataFileName AS NVARCHAR(256)
+	,@logFileName AS NVARCHAR(256)
+	,@sql AS VARCHAR(MAX)
+	,@loop AS INT
+	,@end AS INT
+
+IF OBJECT_ID('tempdb..#DatabaseList') IS NOT NULL
+	DROP TABLE #DatabaseList
+
+CREATE TABLE #DatabaseList (
+	[#DatabaseListId] INT IDENTITY(1, 1) PRIMARY KEY
+	,[DatabaseName] [sysname] NOT NULL
+	,[DataFileName] [sysname] NOT NULL
+	,[LogFileName] [sysname] NOT NULL
+	)
+
+INSERT INTO #DatabaseList
+SELECT d.DatabaseName
+	,d.FileName AS DataFileName
+	,l.FileName AS LogFileName
+FROM (
+	SELECT d.NAME AS DatabaseName
+		,mf.NAME AS FileName
+	FROM sys.master_files mf(NOLOCK)
+	JOIN sys.databases d(NOLOCK) ON mf.database_id = d.database_id
+	WHERE type_desc = 'ROWS'
+	) AS d
+LEFT JOIN (
+	SELECT d.NAME AS DatabaseName
+		,mf.NAME AS FileName
+	FROM sys.master_files mf(NOLOCK)
+	JOIN sys.databases d(NOLOCK) ON mf.database_id = d.database_id
+	WHERE mf.type_desc = 'LOG'
+	) AS l ON l.DatabaseName = d.DatabaseName
+
+SET @end = (
+		SELECT MAX(#DatabaseListId)
+		FROM #DatabaseList
+		)
+SET @loop = 1
+
+WHILE @loop <= @end
+BEGIN
+	SELECT @database = DatabaseName
+		,@dataFileName = DataFileName
+		,@logFileName = LogFileName
+	FROM #DatabaseList
+	WHERE #DatabaseListId = @loop
+
+	--PRINT @database
+	SET @sql = 'USE [' + @database + '];
+		GO
+		ALTER DATABASE [' + @database + '] MODIFY FILE (NAME=''' + @dataFileName + ''',MAXSIZE = UNLIMITED, FILEGROWTH = 256MB);
+		ALTER DATABASE [' + @database + '] MODIFY FILE (NAME=''' + @logFileName + ''',MAXSIZE = UNLIMITED, FILEGROWTH = 128MB);
+		GO'
+
+	PRINT @sql
+
+	SET @loop = @loop + 1
+END
+		/*
+Change PRINT @sql to:
+EXEC (@sql)
+To Update the file sizes automatically
+*/

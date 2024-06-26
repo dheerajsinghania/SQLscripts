@@ -1,0 +1,21 @@
+--You need to put table names in the highlighted section to check and generate commands. 
+--please put database name filter too to avoid deleting tables with same name in different databases
+
+create table #tmp(dbname varchar(1000),catalogname varchar(1000),sch varchar(100),tablename varchar(1000))
+declare dbname cursor for select name from sys.databases where database_id>4 and name not in('distribution','SSISDB') order by 1
+open dbname
+declare @dbname varchar(1000)
+fetch next from dbname into @dbname
+while @@FETCH_STATUS<>-1
+begin
+declare @sql nvarchar(max)
+set @sql='Insert into #tmp select '''+@dbname+''',TABLE_CATALOG,TABLE_SCHEMA,TABLE_NAME from ['+@dbname+'].INFORMATION_SCHEMA.TABLES where TABLE_TYPE=''BASE TABLE'''
+--print @sql
+exec(@sql)
+fetch next from dbname into @dbname
+end
+
+close dbname
+deallocate dbname
+select dbname, catalogname ,'['+sch+'].['+tablename+']' TableName,'drop table ['+dbname+'].['+sch+'].['+tablename+']' DropCommand from #tmp where tablename in('testcat','testdrop')
+drop table #tmp

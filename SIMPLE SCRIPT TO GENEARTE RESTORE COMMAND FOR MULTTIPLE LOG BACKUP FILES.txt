@@ -1,0 +1,8 @@
+SELECT x.database_name, z.physical_device_name, 
+CONVERT(char(20), x.backup_finish_date, 108) FinishTime, x.backup_finish_date, type,
+'RESTORE LOG Debt FROM DISK= '''+z.physical_device_name+''' WITH NORECOVERY, STATS=1'
+              from msdb.dbo.backupset x
+              JOIN msdb.dbo.backupmediafamily z ON x.media_set_id = z.media_set_id 
+              where x.database_name='Debt'
+              order by x.backup_finish_date asc
+

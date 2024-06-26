@@ -1,0 +1,3 @@
+SELECT * 
+FROM [fn_trace_gettable]('C:\Program Files\Microsoft SQL Server\MSSQL.2\MSSQL\LOG\log_127.trc', DEFAULT)
+ORDER BY StartTime;

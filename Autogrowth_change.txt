@@ -1,0 +1,45 @@
+SELECT @@SERVERNAME AS server_name, database_id, DB_NAME(database_id) AS database_name, file_id, type, type_desc, data_space_id, name, 
+state, state_desc, size, max_size, growth, is_read_only, is_percent_growth, GETDATE() AS date_fetched
+INTO tempdb.dbo.autogrowth_history
+FROM sys.master_files
+
+
+DECLARE @dbname VARCHAR(50)
+DECLARE @autogrow VARCHAR(256)
+DECLARE @filename varchar(max)
+DECLARE @statement varchar(max)
+
+DECLARE db_cursor CURSOR FOR 
+SELECT DB_NAME(a.database_id) AS database_name
+       -- , SUM((SIZE*8/1024)) AS size_mb
+		, (CASE WHEN SUM((SIZE*8/1024)) < 256 THEN 32
+		WHEN SUM((SIZE*8/1024)) > 256 AND SUM((SIZE*8/1024)) <= 1024 THEN 128
+		WHEN SUM((SIZE*8/1024)) > 1024 AND SUM((SIZE*8/1024)) <= 5120  THEN 512
+		WHEN SUM((SIZE*8/1024)) > 5120 AND SUM((SIZE*8/1024)) <= 20480  THEN 1024
+		ELSE 2048 END) AS Autogrow_MB
+		, a.name
+    FROM sys.master_files a
+INNER JOIN sys.databases b
+ON a.database_id = b.database_id
+WHERE file_id <> 2
+AND b.state_desc = 'ONLINE'
+AND b.database_id > 4
+AND b.is_read_only = 0
+GROUP BY DB_NAME(a.database_id), a.database_id, a.name
+
+OPEN db_cursor  
+FETCH NEXT FROM db_cursor INTO @dbname, @autogrow, @filename
+
+WHILE @@FETCH_STATUS = 0  
+BEGIN  
+
+	SET @statement = 'USE [master];
+	ALTER DATABASE ['+ @dbname +'] MODIFY FILE ( NAME = N''' + @filename + ''', FILEGROWTH = '+ @autogrow +'MB );'
+	
+	EXEC(@statement)
+
+      FETCH NEXT FROM  db_cursor INTO @dbname, @autogrow, @filename
+END 
+
+CLOSE db_cursor  
+DEALLOCATE db_cursor 

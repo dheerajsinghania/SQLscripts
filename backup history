@@ -1,0 +1,83 @@
+SELECT s.database_name 'Database',
+s.recovery_model 'Recovery Model',
+s.compatibility_level,
+s.USER_NAME 'Backup by Username',
+CASE s.TYPE
+WHEN 'D' THEN 'Full'
+WHEN 'I' THEN 'Diff'
+WHEN 'L' THEN 'Log'
+END 'Backup Type',
+CONVERT(VARCHAR(20), s.backup_finish_date, 13) 'Backup Completed',
+CAST(mf.physical_device_name AS VARCHAR(100)) 'Physical device name',
+DATEDIFF(minute, s.backup_start_date, s.backup_finish_date) 'Duration Min',
+CAST(ROUND(s.backup_size * 1.0 / ( 1024 * 1024 ), 2) AS NUMERIC(10, 2)) 'Size in MB',
+CAST(ROUND(s.compressed_backup_size * 1.0 / ( 1024 * 1024 ), 2) AS NUMERIC(10, 2)) 'Compressed Size in MB',
+CASE WHEN LEFT(mf.physical_device_name, 1) = '{' THEN 'SQL VSS Writer'
+WHEN LEFT(mf.physical_device_name, 3) LIKE '[A-Za-z]:\%' THEN 'SQL Backup'
+WHEN LEFT(mf.physical_device_name, 2) LIKE '\\' THEN 'SQL Backup'
+ELSE mf.physical_device_name
+END 'Backup tool',
+s.is_copy_only,
+s.is_password_protected,
+s.is_force_offline /* for WITH NORECOVERY option */
+FROM   msdb.dbo.backupset s
+INNER JOIN msdb.dbo.backupmediafamily mf ON s.media_set_id = mf.media_set_id
+WHERE  s.database_name = DB_NAME() AND s.type='d' and -- remove this condition if you want all DBs
+s.backup_finish_date > DATEADD(MONTH, -3, GETDATE()) -- Get data for past 3 months
+ORDER BY s.backup_finish_date DESC;
+
+
+
+-------------------------------
+SET NOCOUNT ON
+GO
+SET quoted_identifier OFF
+DECLARE @dbname AS VARCHAR(80)
+DECLARE @msgdb AS VARCHAR(100)
+DECLARE @dbbkpname AS VARCHAR(80)
+DECLARE @dypart1 AS VARCHAR(2)
+DECLARE @dypart2 AS VARCHAR(3)
+DECLARE @dypart3 AS VARCHAR(4)
+DECLARE @currentdate AS VARCHAR(10)
+DECLARE @server_name AS VARCHAR(30)
+SELECT @server_name = @@servername
+SELECT @dypart1 = DATEPART(dd,GETDATE())
+SELECT @dypart2 = DATENAME(mm,GETDATE())
+SELECT @dypart3 = DATEPART(yy,GETDATE())
+SELECT @currentdate= @dypart1 + @dypart2 + @dypart3
+PRINT "#################################################################"
+PRINT "# SERVERNAME : "+ @server_name + " DATE : "+ @currentdate +"#"
+PRINT "#################################################################"
+PRINT "DatabaseName Full Diff TranLog"
+PRINT "#################################################################"
+SELECT SUBSTRING(s.name,1,50) AS 'DATABASE Name',
+b.backup_start_date AS 'Full DB Backup Status',
+c.backup_start_date AS 'Differential DB Backup Status',
+d.backup_start_date AS 'Transaction Log Backup Status'
+FROM MASTER..sysdatabases s
+LEFT OUTER JOIN msdb..backupset b
+ON s.name = b.database_name
+AND b.backup_start_date =
+(SELECT MAX(backup_start_date)AS 'Full DB Backup Status'
+FROM msdb..backupset
+WHERE database_name = b.database_name
+AND TYPE = 'D') -- full database backups only, not log backups
+LEFT OUTER JOIN msdb..backupset c
+ON s.name = c.database_name
+AND c.backup_start_date =
+(SELECT MAX(backup_start_date)'Differential DB Backup Status'
+FROM msdb..backupset
+WHERE database_name = c.database_name
+AND TYPE = 'I')
+LEFT OUTER JOIN msdb..backupset d
+ON s.name = d.database_name
+AND d.backup_start_date =
+(SELECT MAX(backup_start_date)'Transaction Log Backup Status'
+FROM msdb..backupset
+WHERE database_name = d.database_name
+AND TYPE = 'L')
+WHERE s.name <>'tempdb'
+ORDER BY s.name
+-----------------------------
+
+select log_reuse_wait_desc,* from sys.databases 

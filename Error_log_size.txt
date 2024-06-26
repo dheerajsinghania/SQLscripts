@@ -1,0 +1,12 @@
+CREATE TABLE #ServerErrorLog
+(
+Archive INT,
+dt DATETIME,
+FileSize INT
+)
+
+INSERT INTO #ServerErrorLog
+Exec xp_enumerrorlogs
+SELECT Archive, FileSize/1024/1024 AS [Error Log Filef size (MB)]
+FROM #ServerErrorLog
+DROP TABLE #ServerErrorLog

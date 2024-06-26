@@ -1,0 +1,35 @@
+Declare @SQLDataRoot varchar(256)
+exec master..xp_instance_regread
+   @rootkey='HKEY_LOCAL_MACHINE',
+   @key='SOFTWARE\Microsoft\MSSQLServer\Setup',
+   @value_name='SQLPath',
+   @value=@SQLDataRoot output
+
+declare @sql nvarchar(max)
+set @sql='
+CREATE EVENT SESSION FailedLogins
+ON SERVER
+ ADD EVENT sqlserver.error_reported
+ (
+   ACTION 
+   (
+     sqlserver.client_app_name,
+     sqlserver.client_hostname,
+     sqlserver.nt_username
+    )
+    WHERE severity = 14
+
+    -- added this line:
+      AND error_number = 18456
+
+      AND state > 1 -- removes redundant state 1 event
+  )
+  ADD TARGET package0.asynchronous_file_target
+  (
+    SET FILENAME = '''+@SQLDataRoot+'\FailedLogins.xel'',
+    METADATAFILE = '''+@SQLDataRoot + '\FailedLogins.xem''
+  );
+
+ALTER EVENT SESSION FailedLogins ON SERVER STATE = START
+'
+Exec (@sql)
