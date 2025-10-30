@@ -1,65 +1,46 @@
-CREATE PROCEDURE dbo.sp_FixOrphanedUsers
-AS
+DECLARE @dbName NVARCHAR (128);
+DECLARE @sql NVARCHAR(MAX);
+DECLARE db_cursor CURSOR FOR 
+SELECT name FROM sys.databases
+WHERE database_id > 4 -- Exclude system databases
+AND state_desc = 'ONLINE';
+OPEN db_cursor;
+FETCH NEXT FROM db_cursor INTO @dbName;
+WHILE @@FETCH STATUS = 0
 BEGIN
-    SET NOCOUNT ON;
+PRINT 'Checking database: ' + @dbname;
+SET @sql = '
+USE [' + @dbName + '];
+DECLARE @userName NVARCHAR (128):
 
-    DECLARE @SQL nvarchar(max);
-    DECLARE @DBName sysname;
-    DECLARE @UserName sysname;
-    DECLARE @LoginName sysname;
+DECLARE orphaned_users CURSOR FOR 
+Select dp.name
+From sys.database_principals dp
+LEFT JOIN sys.server_principals SP ON dp.sid = Sp.sid
+WHERE dp.type IN (''S'',''U'') AND Sp.sid IS NULL AND dp.authentication_type = 1;
 
-    -- Cursor to iterate through each user database
-    DECLARE db_cursor CURSOR FOR
-    SELECT name
-    FROM sys.databases
-    WHERE database_id > 4 AND state_desc = 'ONLINE';
+OPEN orphaned_users;
+FETCH NEXT FROM orphaned_users INTO @userName;
 
-    OPEN db_cursor;
-    FETCH NEXT FROM db_cursor INTO @DBName;
+WHILE @@FETCH_STATUS =0
+BEGIN
+BEGIN TRY
+PRINT '' - Fixing orphaned user: '' + @username;
+EXEC(''ALTER USER ['' + @userName + ''] WITH LOGIN = ['' + @userName + '']'');
+END TRY
+BEGIN CATCH
+PRINT '' - Failed to fix user: '' + @userName + ''. Error: '' +ERROR_MESSAGE() ;
+END CATCH;
 
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        SET @SQL = '
-        USE [' + @DBName + '];
-
-        DECLARE user_cursor CURSOR FOR
-        SELECT dp.name AS user_name
-        FROM sys.database_principals dp
-        LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
-        WHERE dp.type_desc = ''SQL_USER'' AND sp.sid IS NULL;
-
-        OPEN user_cursor;
-        FETCH NEXT FROM user_cursor INTO @UserName;
-
-        WHILE @@FETCH_STATUS = 0
-        BEGIN
-            SET @LoginName = @UserName;
-            -- Check if a same-named login exists
-            IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = @LoginName)
-            BEGIN
-                PRINT ''Fixing orphaned user ' + @UserName + ' in database ' + @DBName + '...'';
-                -- Remap the user to the existing login
-                ALTER USER [' + @UserName + '] WITH LOGIN = [' + @LoginName + '];
-            END
-            ELSE
-            BEGIN
-                PRINT ''Could not fix user ' + @UserName + ' in database ' + @DBName + ' (Login not found). '';
-            END
-
-            FETCH NEXT FROM user_cursor INTO @UserName;
-        END
-
-        CLOSE user_cursor;
-        DEALLOCATE user_cursor;
-        ';
-
-        EXEC sp_executesql @SQL;
-
-        FETCH NEXT FROM db_cursor INTO @DBName;
-    END
-
-    CLOSE db_cursor;
-    DEALLOCATE db_cursor;
-
+FETCH NEXT FROM orphaned_users INTO @userName;
 END
-GO
+CLOSE orphaned_users;
+DEALLOCATE orphaned_users;
+';
+EXEC sp_executesql @sql;
+
+FETCH NEXT FROM db_cursor INTO @dbName;
+END
+CLOSE db_cursor;
+DEALLOCATE db_cursor;
+PRINT 'Orphaned user fix completed for all databases.';
