@@ -1,0 +1,45 @@
+# Define paths
+$InputFile = "E:\ExcelFile\Server List.csv"
+$OutputFile = "E:\ExcelFile\SQL_Databases_Output.csv"
+
+# SQL query to execute
+$Query = "SELECT SERVERPROPERTY('MachineName') AS ServerName, 
+                 SERVERPROPERTY('InstanceName') AS InstanceName,
+                 name AS DatabaseName, 
+                 state_desc, 
+                 recovery_model_desc 
+          FROM sys.databases 
+          WHERE database_id > 4 or name <> '';"
+
+# Prepare an array to hold all results
+$AllResults = @()
+
+# Import the list of SQL Server instances
+$Instances = Import-Csv -Path $InputFile
+
+foreach ($Instance in $Instances) {
+    $Server = $Instance.InstanceName
+    Write-Host "Connecting to $Server ..." -ForegroundColor Cyan
+
+    try {
+        # Run query using Invoke-Sqlcmd (part of SQLServer module)
+        $Result = Invoke-Sqlcmd -ServerInstance $Server -Query $Query -ErrorAction Stop
+
+        # Add a Server column if not already in result
+        $Result | ForEach-Object { $_ | Add-Member -NotePropertyName "ServerInstance" -NotePropertyValue $Server -Force }
+
+        # Add to overall results
+        $AllResults += $Result
+    }
+    catch {
+        Write-Warning "Failed to connect or run query on $Server. Error: $($_.Exception.Message)"
+    }
+}
+
+# Export final combined results to CSV
+if ($AllResults.Count -gt 0) {
+    $AllResults | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
+    Write-Host "`nResults saved to $OutputFile" -ForegroundColor Green
+} else {
+    Write-Host "`nNo results found or all connections failed." -ForegroundColor Yellow
+}
