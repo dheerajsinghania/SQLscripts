@@ -1,88 +1,65 @@
-USE msdb;
-GO
-
--- Step 1: Create the SQL Agent Job
-EXEC sp_add_job  
-    @job_name = N'Fix Orphaned Users',  
-    @enabled = 1,  
-    @description = N'This job detects and fixes orphaned database users across all user databases.',  
-    @owner_login_name = N'sa';
-GO
-
--- Step 2: Add a Job Step to Execute the Fix Script
-EXEC sp_add_jobstep  
-    @job_name = N'Fix Orphaned Users',  
-    @step_name = N'Detect and Fix Orphaned Users',  
-    @subsystem = N'TSQL',  
-    @database_name = N'master',  
-    @command = N'
-DECLARE @DBName sysname, @SQL NVARCHAR(MAX);
-
-DECLARE db_cursor CURSOR FOR
-SELECT name FROM sys.databases 
-WHERE database_id > 4 AND state = 0;  -- Exclude system databases and offline DBs
-
-OPEN db_cursor;
-FETCH NEXT FROM db_cursor INTO @DBName;
-
-WHILE @@FETCH_STATUS = 0
+CREATE PROCEDURE dbo.sp_FixOrphanedUsers
+AS
 BEGIN
-    SET @SQL = N''
-    USE ['' + @DBName + ''];
-    DECLARE @UserName sysname, @FixCmd NVARCHAR(500);
-    DECLARE orphan_cursor CURSOR FOR
-    SELECT dp.name 
-    FROM sys.database_principals dp
-    LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
-    WHERE dp.type = ''S'' AND sp.sid IS NULL;
+    SET NOCOUNT ON;
 
-    OPEN orphan_cursor;
-    FETCH NEXT FROM orphan_cursor INTO @UserName;
+    DECLARE @SQL nvarchar(max);
+    DECLARE @DBName sysname;
+    DECLARE @UserName sysname;
+    DECLARE @LoginName sysname;
+
+    -- Cursor to iterate through each user database
+    DECLARE db_cursor CURSOR FOR
+    SELECT name
+    FROM sys.databases
+    WHERE database_id > 4 AND state_desc = 'ONLINE';
+
+    OPEN db_cursor;
+    FETCH NEXT FROM db_cursor INTO @DBName;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = @UserName)
+        SET @SQL = '
+        USE [' + @DBName + '];
+
+        DECLARE user_cursor CURSOR FOR
+        SELECT dp.name AS user_name
+        FROM sys.database_principals dp
+        LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
+        WHERE dp.type_desc = ''SQL_USER'' AND sp.sid IS NULL;
+
+        OPEN user_cursor;
+        FETCH NEXT FROM user_cursor INTO @UserName;
+
+        WHILE @@FETCH_STATUS = 0
         BEGIN
-            SET @FixCmd = N''ALTER USER ['' + @UserName + ''] WITH LOGIN = ['' + @UserName + ''];'';
-            EXEC (@FixCmd);
-            PRINT ''Fixed orphan user: '' + @UserName + '' in database: '' + DB_NAME();
+            SET @LoginName = @UserName;
+            -- Check if a same-named login exists
+            IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = @LoginName)
+            BEGIN
+                PRINT ''Fixing orphaned user ' + @UserName + ' in database ' + @DBName + '...'';
+                -- Remap the user to the existing login
+                ALTER USER [' + @UserName + '] WITH LOGIN = [' + @LoginName + '];
+            END
+            ELSE
+            BEGIN
+                PRINT ''Could not fix user ' + @UserName + ' in database ' + @DBName + ' (Login not found). '';
+            END
+
+            FETCH NEXT FROM user_cursor INTO @UserName;
         END
-        ELSE
-        BEGIN
-            PRINT ''No matching login found for orphan user: '' + @UserName + '' in database: '' + DB_NAME();
-        END
-        FETCH NEXT FROM orphan_cursor INTO @UserName;
+
+        CLOSE user_cursor;
+        DEALLOCATE user_cursor;
+        ';
+
+        EXEC sp_executesql @SQL;
+
+        FETCH NEXT FROM db_cursor INTO @DBName;
     END
 
-    CLOSE orphan_cursor;
-    DEALLOCATE orphan_cursor;
-    '';
+    CLOSE db_cursor;
+    DEALLOCATE db_cursor;
 
-    EXEC sp_executesql @SQL;
-    FETCH NEXT FROM db_cursor INTO @DBName;
 END
-
-CLOSE db_cursor;
-DEALLOCATE db_cursor;
-',  
-    @on_success_action = 1,  
-    @on_fail_action = 2;
-GO
-
--- Step 3: Add a Job Schedule (e.g., run weekly on Sunday at 2 AM)
-EXEC sp_add_schedule  
-    @schedule_name = N'Weekly - Sunday 2AM',  
-    @freq_type = 8,            -- Weekly
-    @freq_interval = 1,        -- Sunday
-    @active_start_time = 020000;  -- 2:00 AM
-GO
-
-EXEC sp_attach_schedule  
-    @job_name = N'Fix Orphaned Users',  
-    @schedule_name = N'Weekly - Sunday 2AM';
-GO
-
--- Step 4: Add the Job to the Server
-EXEC sp_add_jobserver  
-    @job_name = N'Fix Orphaned Users';
 GO
