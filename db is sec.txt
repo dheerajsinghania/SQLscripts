@@ -1,6 +1,21 @@
 SELECT d.name
 FROM sys.databases d
-JOIN sys.dm_hadr_database_replica_states drs
+LEFT JOIN sys.dm_hadr_database_replica_states drs
     ON d.database_id = drs.database_id
-WHERE drs.is_local = 1
-  AND drs.role_desc = 'PRIMARY';
+   AND drs.is_local = 1
+WHERE
+    d.state_desc = 'ONLINE'
+    AND (
+        drs.role IS NULL    -- Not part of an AG
+        OR drs.role = 1     -- PRIMARY
+    );
+-----------------------------------------
+
+SELECT d.name
+FROM sys.databases d
+LEFT JOIN sys.dm_hadr_database_replica_states drs
+    ON d.database_id = drs.database_id
+   AND drs.is_local = 1
+WHERE
+    d.state_desc = 'ONLINE'
+    AND ISNULL(drs.role, 1) = 1;
