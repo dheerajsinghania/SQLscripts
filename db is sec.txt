@@ -1,11 +1,15 @@
-SELECT d.name
-FROM sys.databases d
-LEFT JOIN sys.dm_hadr_database_replica_states drs
-    ON d.database_id = drs.database_id
-   AND drs.is_local = 1
-WHERE
-    d.state_desc = 'ONLINE'
-    AND (
-        drs.is_primary_replica = 1   -- PRIMARY replica
-        OR drs.database_id IS NULL   -- Not in an AG
-    );
+Subject: Additional Skills and Experience Overview
+
+Hi [Manager's Name],
+
+Thank you for asking about my additional skill set beyond MSSQL DBA.
+
+Apart from my core experience as an MSSQL DBA, I have also worked extensively as an Azure SQL DBA in my previous organizations. My experience includes managing Azure SQL environments across IaaS (SQL on Azure VMs), Azure SQL Database, and Azure SQL Managed Instance. I have handled deployments, performance tuning, HA/DR configurations, backup strategies, and cost optimization in Azure environments.
+
+Additionally, I have upskilled myself in Azure Data Engineering by setting up a personal lab environment for hands-on practice. I have worked with Azure Data Factory (ADF) to design and create data pipelines, manage linked services, datasets, triggers, and monitor data workflows. This has helped me understand end-to-end data integration and cloud-based ETL processes.
+
+In my early career, I worked in Windows troubleshooting and infrastructure support, which helped me build a strong foundation in OS-level understanding, server management, and issue diagnosis. This background has been very helpful in handling SQL Server hosted on Windows environments.
+
+Overall, my experience spans database administration, Azure cloud SQL services, data integration fundamentals, and infrastructure troubleshooting.
+
+Please let me know if you would like me to elaborate further on any specific area.
