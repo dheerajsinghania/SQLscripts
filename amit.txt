@@ -1,0 +1,52 @@
+$InputFile = "U:\Backup\DBList.csv"
+$OutputFile = "U:\Backup\DB_File_Details.csv"
+
+$DBList = Import-Csv $InputFile
+$Results = @()
+
+foreach ($item in $DBList) {
+    $server = $item.Server
+    $db = $item.Database
+
+    Write-Host "Checking $server - $db"
+
+    $query = @"
+SELECT 
+    DB_NAME() AS DatabaseName,
+    name AS FileName,
+    type_desc AS FileType,
+    physical_name AS FilePath,
+    CAST(size AS BIGINT) * 8 / 1024 AS Size_MB,
+    (CAST(size AS BIGINT) - CAST(FILEPROPERTY(name, 'SpaceUsed') AS BIGINT)) * 8 / 1024 AS FreeSpace_MB,
+    CAST(FILEPROPERTY(name, 'SpaceUsed') AS BIGINT) * 8 / 1024 AS UsedSpace_MB
+FROM sys.database_files;
+"@
+
+    try {
+        $data = Invoke-Sqlcmd -ServerInstance $server -Database $db -Query $query -ErrorAction Stop
+
+        foreach ($row in $data) {
+            $Results += [PSCustomObject]@{
+                Server        = $server
+                Database      = $db
+                FileName      = $row.FileName
+                FileType      = $row.FileType
+                FilePath      = $row.FilePath
+                Size_MB       = $row.Size_MB
+                FreeSpace_MB  = $row.FreeSpace_MB
+                UsedSpace_MB  = $row.UsedSpace_MB
+            }
+        }
+    }
+    catch {
+        Write-Warning "Failed to query $server - $db : $_"
+    }
+}
+
+# Show output
+$Results | Format-Table -AutoSize
+
+# Save to file
+$Results | Export-Csv -NoTypeInformation -Path $OutputFile
+
+Write-Host "Done. Output saved to $OutputFile"
