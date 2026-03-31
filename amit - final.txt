@@ -1,0 +1,110 @@
+# Parameters - update paths accordingly
+$inputCsvPath = "C:\dheeraj\sql.csv"
+$outputCsvPath = "C:\dheeraj\SQLInstanceInfoResults1.csv"
+
+# Your SQL query
+$query = @"
+SELECT
+    @@SERVERNAME AS ServerName,
+    SERVERPROPERTY('MachineName') AS MachineName,
+    SERVERPROPERTY('InstanceName') AS InstanceName,
+    SERVERPROPERTY('Edition') AS Edition,
+    SERVERPROPERTY('ProductVersion') AS ProductVersion,
+    SERVERPROPERTY('ProductLevel') AS ProductLevel,
+    SERVERPROPERTY('IsClustered') AS IsClustered;
+"@
+
+# Function to run SQL query using .NET SqlClient
+function Invoke-SqlQuery {
+    param (
+        [string]$ServerInstance,
+        [string]$Query
+    )
+
+    # Connection string using Windows Authentication; change if needed
+    $connectionString = "Server=$ServerInstance;Integrated Security=True;"
+
+    $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+    $command = $connection.CreateCommand()
+    $command.CommandText = $Query
+
+    try {
+        $connection.Open()
+        $adapter = New-Object System.Data.SqlClient.SqlDataAdapter $command
+        $dataSet = New-Object System.Data.DataSet
+        $adapter.Fill($dataSet) | Out-Null
+        $connection.Close()
+
+        return $dataSet.Tables[0]
+    }
+    catch {
+        Write-Warning "Error querying '$ServerInstance': $_"
+        return $null
+    }
+}
+
+# Import CSV without header, assign single header 'Instance'
+$instancesTable = Import-Csv -Path $inputCsvPath -Header Instance
+
+# Validate instances - remove empty or whitespace-only entries
+$instances = $instancesTable | Select-Object -ExpandProperty Instance | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+if (-not $instances) {
+    Write-Warning "No valid SQL instances found in CSV file."
+    exit
+}
+
+Write-Host "Total valid instances to query: $($instances.Count)"
+
+$allResults = @()
+
+foreach ($instance in $instances) {
+    Write-Host "Querying SQL instance: $instance"
+
+    try {
+        $resultTable = Invoke-SqlQuery -ServerInstance $instance -Query $query
+
+        if ($null -ne $resultTable -and $resultTable.Rows.Count -gt 0) {
+            foreach ($row in $resultTable.Rows) {
+                $obj = @{}
+                foreach ($col in $resultTable.Columns) {
+                    $obj[$col.ColumnName] = $row[$col.ColumnName]
+                }
+                # Add empty Error field for successful query
+                $obj["Error"] = $null
+                $allResults += New-Object PSObject -Property $obj
+            }
+        }
+        else {
+            Write-Warning "No data returned for instance: $instance"
+            $allResults += [PSCustomObject]@{
+                ServerName = $instance
+                MachineName = $null
+                InstanceName = $null
+                Edition = $null
+                ProductVersion = $null
+                ProductLevel = $null
+                IsClustered = $null
+                Error = "Query returned no data."
+            }
+        }
+    }
+    catch {
+        Write-Warning "Unexpected error querying instance '$instance': $_"
+        $allResults += [PSCustomObject]@{
+            ServerName = $instance
+            MachineName = $null
+            InstanceName = $null
+            Edition = $null
+            ProductVersion = $null
+            ProductLevel = $null
+            IsClustered = $null
+            Error = "Exception: $_"
+        }
+    }
+}
+
+# Export all results to CSV
+$allResults | Export-Csv -Path $outputCsvPath -NoTypeInformation -Encoding UTF8
+
+Write-Host "Results saved to $outputCsvPath"
